@@ -424,7 +424,7 @@ const INNER_R = OUTER_R - RING_W;
 const SQ_HALF = Math.floor(INNER_R * 0.70);
 
 let hue = 18, sat = 0.54, val = 0.77;
-let schemeShift = 0;
+let schemeVariation = { h: 0, s: 0, l: 0 };
 
 function drawWheel() {
   ctx.clearRect(0, 0, SIZE, SIZE);
@@ -556,6 +556,7 @@ function setSV(x, y) {
 }
 
 function onColorChange() {
+  schemeVariation = { h: 0, s: 0, l: 0 };
   const hex = hsvToHex(hue, sat, val);
   document.getElementById('hexInput').value = hex.toUpperCase();
   document.getElementById('pickedSwatch').style.background = hex;
@@ -570,25 +571,35 @@ document.getElementById('hexInput').addEventListener('change', e => {
   if (!v.startsWith('#')) v = '#' + v;
   if (/^#[0-9a-fA-F]{6}$/.test(v)) {
     [hue, sat, val] = hexToHsv(v);
-    schemeShift = 0;
     onColorChange();
   } else {
     e.target.value = hsvToHex(hue, sat, val).toUpperCase();
   }
 });
 
-/* ── Regen button（ベースカラー固定・配色バリエーションをランダム化）── */
+/* ── Regen button（ベースカラー固定・アクセント/サポート/バックのみランダム化）── */
 document.getElementById('regenBtn').addEventListener('click', () => {
-  schemeShift = Math.random() * 360;
+  schemeVariation = {
+    h: (Math.random() - 0.5) * 120,
+    s: (Math.random() - 0.5) * 20,
+    l: (Math.random() - 0.5) * 10,
+  };
   const [h, s, l] = hexToHsl(hsvToHex(hue, sat, val));
   renderPalettes(h, s, l);
 });
 
 /* ── Palettes ── */
 function renderPalettes(h, s, l) {
-  const sh = (h + schemeShift + 360) % 360;
+  const baseHex = hslToHex(h, s, l);
   document.getElementById('palettes').innerHTML = SCHEMES.map(scheme => {
-    const colors = scheme.fn(sh, s, l).map(col => ({ role: col.role, hex: hslToHex(col.h, col.s, col.l) }));
+    const rawColors = scheme.fn(h, s, l);
+    const colors = rawColors.map((col, i) => {
+      if (i === 0) return { role: col.role, hex: baseHex };
+      const nh = (col.h + schemeVariation.h + 360) % 360;
+      const ns = c(col.s + schemeVariation.s, 5, 95);
+      const nl = c(col.l + schemeVariation.l, 5, 95);
+      return { role: col.role, hex: hslToHex(nh, ns, nl) };
+    });
     const swatchesHtml = colors.map(col => {
       const tc = contrastColor(col.hex);
       return `<div class="swatch" style="background:${col.hex}" onclick="copyHex('${col.hex}')">
