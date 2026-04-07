@@ -82,12 +82,22 @@
       border: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .picked-hex {
+    .hex-input {
+      font-family: 'LINESeedJP', sans-serif;
       font-size: 1.05rem;
       font-weight: 700;
       letter-spacing: 0.06em;
       color: var(--text);
+      border: none;
+      border-bottom: 1.5px solid transparent;
+      outline: none;
+      background: transparent;
+      width: 100px;
+      padding: 0;
+      cursor: text;
+      transition: border-color 0.15s;
     }
+    .hex-input:focus { border-bottom-color: var(--border-hover); }
 
     .regen-btn {
       width: 100%;
@@ -275,7 +285,7 @@
     <canvas id="colorWheel" width="240" height="240"></canvas>
     <div class="picked-color-row">
       <div class="picked-swatch" id="pickedSwatch"></div>
-      <div class="picked-hex" id="hexDisplay">#C47B5A</div>
+      <input class="hex-input" id="hexInput" value="#C47B5A" maxlength="7" spellcheck="false">
     </div>
     <button class="regen-btn" id="regenBtn">ランダム生成</button>
   </div>
@@ -414,6 +424,7 @@ const INNER_R = OUTER_R - RING_W;
 const SQ_HALF = Math.floor(INNER_R * 0.70);
 
 let hue = 18, sat = 0.54, val = 0.77;
+let schemeShift = 0;
 
 function drawWheel() {
   ctx.clearRect(0, 0, SIZE, SIZE);
@@ -546,25 +557,38 @@ function setSV(x, y) {
 
 function onColorChange() {
   const hex = hsvToHex(hue, sat, val);
-  document.getElementById('hexDisplay').textContent = hex.toUpperCase();
+  document.getElementById('hexInput').value = hex.toUpperCase();
   document.getElementById('pickedSwatch').style.background = hex;
   drawWheel();
   const [h, s, l] = hexToHsl(hex);
   renderPalettes(h, s, l);
 }
 
-/* ── Regen button ── */
+/* ── Hex input ── */
+document.getElementById('hexInput').addEventListener('change', e => {
+  let v = e.target.value.trim();
+  if (!v.startsWith('#')) v = '#' + v;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+    [hue, sat, val] = hexToHsv(v);
+    schemeShift = 0;
+    onColorChange();
+  } else {
+    e.target.value = hsvToHex(hue, sat, val).toUpperCase();
+  }
+});
+
+/* ── Regen button（ベースカラー固定・配色バリエーションをランダム化）── */
 document.getElementById('regenBtn').addEventListener('click', () => {
-  hue = Math.random() * 360;
-  sat = 0.35 + Math.random() * 0.55;
-  val = 0.45 + Math.random() * 0.5;
-  onColorChange();
+  schemeShift = Math.random() * 360;
+  const [h, s, l] = hexToHsl(hsvToHex(hue, sat, val));
+  renderPalettes(h, s, l);
 });
 
 /* ── Palettes ── */
 function renderPalettes(h, s, l) {
+  const sh = (h + schemeShift + 360) % 360;
   document.getElementById('palettes').innerHTML = SCHEMES.map(scheme => {
-    const colors = scheme.fn(h, s, l).map(col => ({ role: col.role, hex: hslToHex(col.h, col.s, col.l) }));
+    const colors = scheme.fn(sh, s, l).map(col => ({ role: col.role, hex: hslToHex(col.h, col.s, col.l) }));
     const swatchesHtml = colors.map(col => {
       const tc = contrastColor(col.hex);
       return `<div class="swatch" style="background:${col.hex}" onclick="copyHex('${col.hex}')">
